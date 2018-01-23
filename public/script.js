@@ -19,7 +19,7 @@ window.onload = function() {
     var stage = new PIXI.Container();
     var locardsContainer = new PIXI.Container();
     locardsContainer.x = 0;
-    locardsContainer.y = 0;
+    locardsContainer.y = 100;
     locardsContainer.backgroundColor = 0x061639;
     stage.addChild(locardsContainer);
 
@@ -31,8 +31,8 @@ window.onload = function() {
 
     function setup() {
         console.log("setup");
-        for(var i = 0 ; i < 4 ; ++i){
-            createCard(0,25*i)
+        for(var i = 0 ; i < 5 ; ++i){
+            createCard(100+(i*150),100);
         }
         //createCard(0, 0);
 
@@ -51,16 +51,7 @@ window.onload = function() {
 
         card
         // events for drag start
-            .on('mousedown', onDragStart)
-            .on('touchstart', onDragStart)
-            // events for drag end
-            .on('mouseup', onDragEnd)
-            .on('mouseupoutside', onDragEnd)
-            .on('touchend', onDragEnd)
-            .on('touchendoutside', onDragEnd)
-            // events for drag move
-            .on('mousemove', onDragMove)
-            .on('touchmove', onDragMove);
+            .on('mousedown', selectCard)
 
 
         //Add the cat to the stage so you can see it
@@ -73,33 +64,12 @@ window.onload = function() {
         renderer.render(stage);
     }
 
-    function onDragStart(event) {
-        // store a reference to the data
-        // the reason for this is because of multitouch
-        // we want to track the movement of this particular touch
+    function selectCard(event) {
         this.data = event.data;
+        this.cardSelected = !this.cardSelected;
         this.alpha = 0.5;
-        this.dragging = true;
-    }
-
-    function onDragEnd() {
-        this.alpha = 1;
-
-        console.log(this.position.x);
-
-
-        this.dragging = false;
-
-        // set the interaction data to null
-        this.data = null;
-    }
-
-    function onDragMove() {
-        if (this.dragging) {
-            var newPosition = this.data.getLocalPosition(this.parent);
-            this.position.x = newPosition.x;
-            this.position.y = newPosition.y;
-        }
+        filter = new PIXI.Filter(null, res.shader.data);
+        this.filters = [filter];
     }
 };
 
