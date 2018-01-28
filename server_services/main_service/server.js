@@ -1,10 +1,9 @@
 var WebSocketServer = require('websocket').server;
-var WebSocketClient = require('websocket').client;
-var WebSocketFrame  = require('websocket').frame;
-var WebSocketRouter = require('websocket').router;
-var W3CWebSocket = require('websocket').w3cwebsocket;
 
 var http = require('http');
+var Redis = require('ioredis');
+var redis = new Redis();
+var matchmaker = require('./matchmaker.js').matchmaker;
 
 var cards = require('./cards.json');
 
@@ -28,6 +27,10 @@ wsServer = new WebSocketServer({
     httpServer: server,
     autoAcceptConnections: false
 });
+
+setInterval(()=> {
+    matchmaker(connections);
+}, 5000);
 
 /**
  * detect wether the specifier origin is allowed
@@ -79,8 +82,6 @@ wsServer.on('request', function(request) {
  * @param  {number} id         the id of the connection
  */
 function startGame(connection, request, id){
-    console.log(typeof(request));
-    console.log(typeof(connection));
     connection.sendUTF(JSON.stringify({
             command: 'sys',
             message: 'Player info received, matching player...'
@@ -91,6 +92,10 @@ function startGame(connection, request, id){
             'ID' : id, 
             'data' : request.data
         });
+        redis.set('test', 1111);
+        redis.get('test').then(( result) => {
+            console.log(result);
+        })
     } else {
         let opponent = waitingPlayers[0];
         waitingPlayers.splice(0,1);
