@@ -1,18 +1,20 @@
-{
-    "001" : {
+const cards = [
+    {
         "name" : "Mandragora",
-        "HP" : "1",
-        "Atk" : "2",
-        "cost" : "1",
-        "abilities" : {
-            "battlecry" : {
-                "type" : "heal",
-                "potency" : "2"
+        "specs" : {
+            "HP" : "1",
+            "Atk" : "2",
+            "cost" : "1",
+            "abilities" : {
+                "battlecry" : {
+                    "type" : "heal",
+                    "potency" : "2"
+                }
             }
         }
-    },
-      "002" : {
+    },{
         "name" : "Spriggan",
+        "specs" : {
         "type" : "monster",
         "HP" : "1",
         "Atk" : "2",
@@ -22,27 +24,30 @@
                 "type" : "charge"
             }
         }
-    },
-      "003" : {
+    }
+    },{
         "name" : "Sylvan Sough",
+        "specs" : {
         "type" : "sylph",
         "HP" : "1",
         "Atk" : "2",
         "cost" : "1",
         "abilities" : {  
         }
-    },
-      "004" : {
+    }
+    },{
         "name" : "Raptor",
+        "specs" : {
         "type" : "monster",
         "HP" : "3",
         "Atk" : "2",
         "cost" : "2",
         "abilities" :{
         }
-    },
-    "005" : {
+    }
+    },{
         "name" : "Mammet",
+        "specs" : {
         "HP" : "1",
         "Atk" : "1",
         "cost" : "2",
@@ -52,18 +57,20 @@
                 "potency" : "1"
             }
         }
-    },
-    "006" : {
+    }
+    },{
         "name" : "Ahriman",
+        "specs" : {
         "type" : "monster",
         "HP" : "2",
         "Atk" : "3",
         "cost" : "2",
         "abilities" : {
         }
-    },
-    "008" : {
+    }
+    },{
         "name" : " Qiqirn",
+        "specs" : {
         "HP" : "1",
         "Atk" : "3",
         "cost" : "3",
@@ -72,9 +79,10 @@
                 "type" : "charge"
             } 
         }
-    },
-    "009" : {
+    }
+    },{
         "name" : "Puksi Piko the Shaggysong",
+        "specs" : {
         "HP" : "2",
         "Atk" : "2",
         "cost" : "3",
@@ -84,35 +92,39 @@
                 "potency" : "1"
             }
         }
-    },
-    "010" : {
+    }
+    },{
         "name" : "Tonberry Creeper",
+        "specs" : {
         "HP" : "1",
         "Atk" : "5",
         "cost" : "3",
         "abilities" : {
         }
-    },
-    "011" : {
+    }
+    },{
         "name" : "Dullahan",
+        "specs" : {
         "HP" : "5",
         "Atk" : "3",
         "cost" : "4",
         "abilities" : {
             "taunt" : ""
         }
-    },
-    "012" : {
+    }
+    },{
         "name" : "Adamantoise",
+        "specs" : {
         "type" : "monster",
         "HP" : "7",
         "Atk" : "2",
         "cost" : "4",
         "abilities" : {
         }
-    },
-    "013" : {
+    }
+    },{
         "name" : "Cactuar",
+        "specs" : {
         "HP" : "4",
         "Atk" : "4",
         "cost" : "5",
@@ -120,12 +132,13 @@
             "battlecry" : {
                 "type" : "dmg",
                 "potency" : "4",
-                "target" : "hero"
+                "target" : "face"
             }
         }
-    },
-     "014" : {
+    }
+    },{
         "name" : "Raubahn",
+        "specs" : {
         "HP" : "2",
         "Atk" : "5",
         "cost" : "6",
@@ -134,14 +147,20 @@
                 "type" : "charge"
             }
         }
-    },
-     "015" : {
+    }
+    },{
         "name" : "Goobue",
+        "specs" : {
         "HP" : "7",
         "Atk" : "6",
         "cost" : "6",
         "abilities" : {
         }
     }
+    }
 
+]
+
+module.exports = {
+    cards
 }
