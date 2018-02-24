@@ -1,5 +1,7 @@
 #db
 config.json
+server_services/main_service/ay-game-db/
+
 
 # Logs
 logs
