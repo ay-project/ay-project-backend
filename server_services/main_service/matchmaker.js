@@ -1,4 +1,5 @@
 const players = require('./database/controllers/players');
+var initGame = require('./game_manager.js').initGame;
 
 var waitList = [];
 
@@ -8,15 +9,20 @@ var waitList = [];
  */
 function matchmake() {
 	if(waitList.length > 1) {
-
+		initGame(waitList[0], waitList[1]);
+		waitList.splice(0,2);
 	}
 }
 
+
 function addWaitingPlayer(connection, message) {
-	players.getByTag('Livvy')
-		.then((res) => {
-			console.log(res);
-		})
+	waitList.push({
+		id: message.playerId,
+		deckId: message.deckId,
+		connection: connection
+	});
+	sendMessage(connection, "Request received wait for second player...");
+	matchmake();
 }
 
 function getPlayerInfos(id) {
@@ -39,6 +45,9 @@ function sendMessage(connection, message) {
     }));
 }
 function route (connection, message) {
+	console.log(message);
+	switch (message.command) {
+		case 'start-game':
 	switch (message.command) {
 		case 'looking_to_play':
 			addWaitingPlayer(connection,message);
