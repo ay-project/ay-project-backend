@@ -1,8 +1,7 @@
 window.WebSocket = window.WebSocket || window.MozWebSocket;
 
-var connection = new WebSocket('ws:/localhost:3000', 'echo-protocol');
-//http://10.192.181.76
-//var connection = new WebSocket('ws:/10.192.181.76:3000', 'echo-protocol');
+var connection = new WebSocket('ws://192.168.137.1:3000', 'echo-protocol');
+
 
 var currentPlayer;
 var game;
@@ -24,10 +23,7 @@ window.onload = function() {
     });
 };
 
-function sendCommand() {
-    let command = document.getElementById('command').value
-    document.getElementById('command').value = '';
-    document.getElementById('command').focus();
+function sendCommand(command) {
     command = command.trim();
     writeToConsole(command);
     let partials = command.split(" ");
@@ -135,20 +131,8 @@ function sendCommand() {
                 }
             })
             break;
-        case 'hero-power': 
-            sendMessage({
-                target: 'game-manager',
-                message: {
-                    command: partials[0],
-                    gameId: game.gameId,
-                    playerId: currentPlayer.id,
-                    defender:  partials[1]
-                }
-            })
-            break;
     }
 }
-
 
 function sendMessage(message) {
     connection.send(JSON.stringify(message));
@@ -218,14 +202,16 @@ connection.onmessage = function(message) {
                 writeToConsole("Waiting on adversary...", colors.data);
             }
             else if(json.command == 'update-game') {
-                game.localBoard = json.message.localBoard;
-                game.hand = json.message.localHand;
-                game.mana = json.message.localMana;
-                game.HP = json.message.localHP;
-                game.adversaryHP = json.message.adversaryHP;
-                game.adversaryMana = json.message.adversaryMana;
-                game.adversaryBoard = json.message.adversaryBoard;
-                game.adversaryHand = json.message.adversaryHand;
+                if (json.message.hasOwnProperty('local')) {
+                    game.localBoard = json.message.local;
+                    game.hand = json.message.hand;
+                    game.mana = json.message.mana;
+                }
+                else {
+                    game.adversaryBoard = json.message.adversary;
+                    game.adversaryMana = json.message.mana;
+                    game.adversaryHand = json.message.hand;
+                }
                 game.drawGame(writeToConsole);
             }
             else if(json.command == 'update-board') {
@@ -236,13 +222,6 @@ connection.onmessage = function(message) {
             else if(json.command == 'update-hp') {
                 game.HP = json.message.local;
                 game.adversaryHP = json.message.adversary;
-            }
-            else if(json.command == 'update-mana') {
-                game.mana = json.message.local;
-                game.adversaryMana = json.message.adversary;
-            }
-            else if(json.command == 'end-game') {
-                writeToConsole("GAME OVER! Winner : " + json.message.winner, colors.blue);
             }
         } 
         // handle incoming message

@@ -1,9 +1,13 @@
 const players = require('./database/controllers/players');
 const decks = require('./database/controllers/decks');
+const cards = require('./database/controllers/cards');
 const deck_card = require('./database/controllers/deck_card');
 
-const startingCards = 3; 
-const maxBoardSize = 5; 
+const STARTING_CARDS_NUMBER_FIRST = 3; 
+const STARTING_CARDS_NUMBER_SECOND = 4; 
+const MAX_BOARD_SIZE = 7;
+const MAX_HAND_SIZE = 10; 
+const COIN_ID = 100;
 
 var levelup = require('levelup')
 var leveldown = require('leveldown')
@@ -33,7 +37,7 @@ function initGame(player1, player2) {
               id: player1.id,
               tag: data[0].gamerTag,
               job: data[2].job,
-              hand: drawCards(data[2].cards,startingCards),
+              hand: [],
               manapool: 0,
               mana: 0,
               deck: data[2].cards,
@@ -41,13 +45,15 @@ function initGame(player1, player2) {
               deckid: 1,
               board: [],
               weapon: {},
-              HP: 30
+              HP: 30,
+			  powerActions: 1,
+			  battlecries : []
           },
           player2: {
               id: player2.id,
               tag: data[1].gamerTag,
-              job: data[2].job,
-              hand: drawCards(data[3].cards,startingCards),
+              job: data[3].job,
+              hand: [],
               manapool: 0,
               mana: 0,
               deck: data[3].cards,
@@ -55,11 +61,15 @@ function initGame(player1, player2) {
               deckid: 2,
               board: [],
               weapon: {},
-              HP: 30
+              HP: 30,
+			  powerActions: 1,
+			  battlecries : []
           },
           playing: pickRandom(['player1', 'player2']),
           status: GameStatus.swaping
 		};
+		allocateIds(gameData);
+		setUpHands(gameData);
 		lastId++;
 		return db.put(lastId, JSON.stringify(gameData));
 	})
@@ -95,7 +105,33 @@ function initGame(player1, player2) {
 	
 }
 
-function swapCards(message, gameData, sendMessage) {
+function setUpHands(gameData) {
+	let firstPlayer = (gameData.playing == 'player1') ? gameData.player1 : gameData.player2;
+	let secondPlayer = (gameData.playing == 'player1') ? gameData.player2 : gameData.player1;
+	
+	firstPlayer.hand = drawCards(firstPlayer.deck, STARTING_CARDS_NUMBER_FIRST);
+	secondPlayer.hand = drawCards(secondPlayer.deck, STARTING_CARDS_NUMBER_SECOND);
+}
+
+async function giveCoin(gameData) {
+	let secondPlayer = (gameData.playing == 'player1') ? gameData.player2 : gameData.player1;
+	let coin = await cards.getById(COIN_ID);
+	coin.uid = gameData.nextID;
+	gameData.nextID++;
+	secondPlayer.hand.push(coin);
+}
+
+function allocateIds(gameData) {
+	gameData.nextID = 1;
+	for (let i = 0; i < gameData.player1.deck.length; i++) {
+		gameData.player1.deck[i].uid = gameData.nextID;
+		gameData.nextID++;
+		gameData.player2.deck[i].uid = gameData.nextID;
+		gameData.nextID++;
+	}
+}
+
+async function swapCards(message, gameData, sendMessage) {
 	let player = (gameData.player1.id == message.playerId) ? 'player1' : 'player2';
 	if (gameData[player].hasOwnProperty('swapped')) {
 		sendMessage(connections[gameData[player].id], 'error', 'Cards already swapped please wait');
@@ -119,14 +155,15 @@ function swapCards(message, gameData, sendMessage) {
 	if(gameData.player1.hasOwnProperty('swapped') && gameData.player2.hasOwnProperty('swapped')) {
 		sendMessage(connections[gameData.player1.id], 'swap-cards-completed', gameData.player2.swapped);
 		sendMessage(connections[gameData.player2.id], 'swap-cards-completed', gameData.player1.swapped);
-		startGame(message, gameData, sendMessage);
+		await startGame(message, gameData, sendMessage);
 	}
 }
 
-function startGame(message, gameData, sendMessage) {
+async function startGame(message, gameData, sendMessage) {
 	let playing = gameData.playing;
 	let notPlaying = (playing == 'player1') ? 'player2' : 'player1';
-	gameData[gameData.playing].hand.push(...drawCards(gameData[gameData.playing].deck, 1));
+	await giveCoin(gameData);
+	addCardsToHand(gameData[playing]);
 	gameData[gameData.playing].mana = 1;
 	gameData[gameData.playing].manapool = 1;
 	sendMessage(connections[gameData[playing].id], 'start-turn', {
@@ -152,7 +189,7 @@ function endTurn(message, gameData, sendMessage) {
 	gameData[gameData.playing].manapool = (gameData[gameData.playing].manapool < 10) ? 
 											gameData[gameData.playing].manapool + 1 : 
 											gameData[gameData.playing].manapool; 
-	gameData[gameData.playing].hand.push(...drawCards(gameData[gameData.playing].deck, 1));
+	addCardsToHand(gameData[gameData.playing]);
 	gameData[gameData.playing].mana = gameData[gameData.playing].manapool;
 	for (let i in gameData[gameData.playing].board) {
 		gameData[gameData.playing].board[i].actions = 1;
@@ -175,8 +212,7 @@ function endTurn(message, gameData, sendMessage) {
 	});
 }
 
-function playCard(message, gameData, sendMessage) {
-	console.log("PLAYING CARD")
+async function playCard(message, gameData, sendMessage) {
 	let player = (gameData.player1.id == message.playerId) ? 'player1' : 'player2';
 	let adversary = (gameData.player1.id == message.playerId) ? 'player2' : 'player1';
 	let index;
@@ -188,7 +224,6 @@ function playCard(message, gameData, sendMessage) {
 	}
 
 	index = gameData[player].hand.findIndex(x => x.uid == message.card);
-	console.log(index);
 	card = gameData[player].hand[index];
 
 	if (!isCardValid(index, gameData, player, sendMessage))
@@ -196,30 +231,38 @@ function playCard(message, gameData, sendMessage) {
 
 	switch (card.type) {
 		case 'creature' : 
-			playCreatureCard(gameData, index, message.index, player);
+			await playCreatureCard(gameData, card, message.index, player, message, sendMessage);
 			break;
 		case 'weapon' :
 			playWeapon(gameData, card, player);
 			break;
 		case 'spell' :
-			playSpellCard(gameData, message, player);
-			breakl
+			await playSpellCard(gameData, message, player, card, sendMessage);
+			break;
 	}
-	console.log("here");
 	gameData[player].mana -= card.specs.cost;
 	gameData[player].hand.splice(index,1);
 
-	sendMessage(connections[gameData[player].id], 'update-game', {
-		local: gameData[player].board,
-		hand: gameData[player].hand,
-		mana: gameData[player].mana
+	sendMessage(connections[gameData.player1.id], 'update-game', {
+		localBoard : gameData.player1.board,
+		localHP : gameData.player1.HP, 
+		adversaryHP : gameData.player2.HP,
+		adversaryBoard : gameData.player2.board,
+		localMana : gameData.player1.mana,
+		adversaryMana : gameData.player2.mana,
+		localHand :gameData.player1.hand,
+		adversaryHand : gameData.player2.hand.length
 	});
-	sendMessage(connections[gameData[adversary].id], 'update-game', {
-		adversary: gameData[player].board,
-		mana: gameData[player].mana,
-		hand: gameData[player].hand.length
+	sendMessage(connections[gameData.player2.id], 'update-game', {
+		localBoard : gameData.player2.board,
+		localHP : gameData.player2.HP, 
+		adversaryHP : gameData.player1.HP,
+		adversaryBoard : gameData.player1.board,
+		localMana : gameData.player2.mana,
+		adversaryMana : gameData.player1.mana,
+		localHand :gameData.player2.hand,
+		adversaryHand : gameData.player1.hand.length
 	});
-
 }
 
 function playWeapon(gameData, weapon, player) {
@@ -228,65 +271,849 @@ function playWeapon(gameData, weapon, player) {
 
 }
 
-function playSpellCard(gameData, message) {
+async function playSpellCard(gameData, message, player, card, sendMessage) {
 	console.log('playing spell card');
-}
- 
-function playCreatureCard(gameData, card, index, player) {
-	console.log("PLAYING CREATURE CARD")
-	gameData[player].board.splice(index, 0, gameData[player].hand[card]);
-	gameData[player].board[index].cHP = gameData[player].board[index].specs.HP;
-	gameData[player].board[index].cAtk = gameData[player].board[index].specs.Atk;
-	gameData[player].board[index].actions = 0;
+	for (let i = 0; i < card.specs.effects.length; i++) {
+		let effect = card.specs.effects[i];
+		let potency;
+		if (effect.hasOwnProperty('potency') && effect.potency.hasOwnProperty('conditions')) {
+			potency = effect.potency.default;
+			for (let i = 0; i < effect.potency.conditions.length; i++) {
+				if (validateConditions(gameData, effect.potency.conditions[i].conditions)) {
+					potency = effect.potency.conditions[i].potency;
+					break;
+				}
+			}
+		}
+		else {
+			potency = effect.potency;
+		}
+		switch (effect.type) {
+			case 'dmg': {
+				let repetition = (effect.hasOwnProperty('repetition')) ? effect.repetition : 1;
+				for (let i = 0; i < repetition; i++) {
+					let target = handleTarget(gameData, effect.target, message);
+					if (target === false) {
+						console.log('invalid target');
+						return;
+					}
+					dmgTarget(potency, target);
+					clearDead(gameData, target, sendMessage)
+				}
+				break;
+			}
+			case 'heal' : {
+				let repetition = (effect.hasOwnProperty('repetition')) ? effect.repetition : 1;
+				for (let i = 0; i < repetition; i++) {
+					let target = handleTarget(gameData, effect.target, message);
+					if (target === false) {
+						console.log('invalid target');
+						return;
+					}
+					healTarget(potency, target);
+					clearDead(gameData, target, sendMessage)
+				}
+				break;
+			}
+			case 'draw' : {
+				let target = handleTarget(gameData, effect.target, message);
+				if (target === false) {
+					console.log('invalid target');
+					return;
+				}
+				addCardsToHand(target, potency);	
+				break;
+			}
+			case 'morph' : {
+				let target = handleTarget(gameData, effect.target, message);
+				if (target === false) {
+					console.log('invalid target');
+					return;
+				}
+				let morph = await cards.getById(effect.morph);
+				morph.uid = gameData.nextID;
+				gameData.nextID++;
+				morphCreatureCard(gameData, morph, target);
+				break;
 
-	// check sides bonus
-	// check board wide bonus
-	console.log(gameData[player].board);
-	console.log(index);
-	if (gameData[player].board[index].specs.abilities.hasOwnProperty('battlecry')) {
-		let battlecry = gameData[player].board[index].specs.abilities.battlecry;
-		if (battlecry.type == 'charge') {
-			gameData[player].board[index].actions += 1;;
-		} else if (battlecry.type == 'heal') {
+			}
+			case 'summon' : {
+				await summonCard(gameData, effect, potency, player, sendMessage);
+				break;
+			}
+			case 'bonus' : {
+				applyBonuses(gameData, effect.bonus, card.uid, message);
+				break;
+			}
+			case 'set' : {
+				switch (effect.attribute) {
+					case 'HP' : {
+						let target = handleTarget(gameData, effect.target, message);
+						if (target === false) {
+							console.log('invalid target');
+							return;
+						}
+						target.board[target.index].cHP = effect.set;
+						target.board[target.index].cMaxHP = effect.set;
+						break;
+					}
+					case 'Atk' : {
+						let target = handleTarget(gameData, effect.target, message);
+						if (target === false) {
+							console.log('invalid target');
+							return;
+						}
+						target.board[target.index].cAtk = effect.set;
+						break;
+					}
 
-		} else if (battlecry.type == 'dmg') {
-			
-		} else if (battlecry.type == 'draw') {
-			gameData[player].hand.push(...drawCards(gameData[player].deck, battlecry.potency));
+				}	
+			}
 		}
 	}
 }
 
-function dmgTarget(potency, target, playerData) {
-	let creature = playerData.board[target];
-	creature.cHP -= potency;
-	if (creature.cHP <= 0) {
-		playerData.board.splice(target,1);
-		playerData.graveward.push(creature);
+async function summonCard(gameData, effect, potency, player, sendMessage) {
+	if (effect.summon.constructor === Array) {
+		for (let i = 0; i < potency; i++) {
+			let pick = Math.floor(Math.random() * (effect.summon.length-1));
+			let summon = await cards.getById(effect.summon[pick]);
+			summon.uid = gameData.nextID;
+			gameData.nextID++;
+			playCreatureCard(gameData, summon, gameData[player].board.length, player, {}, sendMessage);
+		}
+	} else {
+		for (let i = 0; i < potency; i++) {
+			let summon = await cards.getById(effect.summon);
+			summon.uid = gameData.nextID;
+			gameData.nextID++;
+			playCreatureCard(gameData, summon, gameData[player].board.length, player, {}, sendMessage);		
+		}		
+	}
+}
+
+
+function validateCondition(gameData, condition) {
+	switch (condition.type) {
+		case "family" : {
+			if (findTarget(gameData, condition).index.length == 0)
+				return false;
+		}
+	}
+	return true;
+}
+
+function validateConditions(gameData, conditions) {
+	for (let i = 0; i < conditions.length; i++) {
+		let condition = conditions[i];
+		switch (condition.type) {
+			case "family" : {
+				if (findTarget(gameData, condition).index.length == 0)
+					return false;
+			}
+		}
+	}
+	return true;
+}
+
+function validateTargetCondition(gameData, condition, target, board) {
+	type = (condition.type == 'aoe') ? 'location' : condition.type
+	switch (type) {
+		case "family" : {
+			if (target.specs.family != condition.family)
+				return false;
+		}
+		case "location" : {
+			switch (condition.location) {
+				case 'local-board' : {
+					if (board != gameData[gameData.playing].board)
+						return false;
+					break;
+				}
+				case 'adversary-board' : {
+					if (board == gameData[gameData.playing].board)
+						return false; 
+					break;
+				}
+				case 'adversary' : {
+					if (target.hasOwnProperty('HP')) {
+						if (target.id == gameData[gameData.playing].id)
+							return false;
+					}
+					else {
+						if (board == gameData[gameData.playing].board)
+							return false;
+					}
+					break;
+				}
+				case 'local' : {
+					if (target.hasOwnProperty('HP')) {
+						if (target.id != gameData[gameData.playing].id)
+							return false;
+					}
+					else {
+						if (board != gameData[gameData.playing].board)
+							return false;
+					}
+				}
+				case 'board' : {
+					if (target.hasOwnProperty('tag'))
+						return false;
+				}
+			}
+		}
+	}
+	return true;
+}
+
+function validateTargetConditions(gameData, conditions, target, board) {
+	for (let i = 0; i < conditions.length; i++) {
+		let condition = conditions[i];
+		return validateTargetCondition(gameData, conditions[i], target, board);	
+	}
+}
+
+function morphCreatureCard(gameData, card, target) {
+	if (card.specs.abilities.hasOwnProperty('bonus')) {
+		applyBonuses(gameData, card.specs.abilities.bonus, card.uid);
+	}
+	target.board[target.index] = card;
+	target.board[target.index].cHP = target.board[target.index].specs.HP;
+	target.board[target.index].cMaxHP = target.board[target.index].specs.HP;
+	target.board[target.index].cAtk = target.board[target.index].specs.Atk;
+	target.board[target.index].actions = 0;
+	target.board[target.index].status = {};
+}
+async function playCreatureCard(gameData, card, index, player, message, sendMessage) {
+	let adversary = (gameData.playing == 'player1') ? 'player2' : 'player1';
+
+	if (card.specs.abilities.hasOwnProperty('bonus')) {
+		applyBonuses(gameData, card.specs.abilities.bonus, card.uid);
+	}
+
+	gameData[player].board.splice(index, 0, card);
+	gameData[player].board[index].cHP = gameData[player].board[index].specs.HP;
+	gameData[player].board[index].cMaxHP = gameData[player].board[index].specs.HP;
+	gameData[player].board[index].cAtk = gameData[player].board[index].specs.Atk;
+	gameData[player].board[index].actions = 0;
+	gameData[player].board[index].status = {};
+
+	checkForBonus(gameData, gameData[player].board, gameData[player].board[index]);
+
+	if (gameData[player].board[index].specs.abilities.hasOwnProperty('battlecry')) {
+		for (let i = 0; i < gameData[player].board[index].specs.abilities.battlecry.length; i++) {
+			let battlecry = gameData[player].board[index].specs.abilities.battlecry[i];
+			switch (battlecry.type) {
+				case 'charge' : {
+					gameData[player].board[index].actions += 1;
+					break;
+				}
+				case 'heal' : {
+					if (!message.defender) 
+						return;
+					let target = handleTarget(gameData, battlecry.target, message);
+					if (target === false) {
+						/// invalid target stop !
+						console.log("DIDNT FIND IT!");
+						return;
+					}
+					else {
+						healTarget(battlecry.potency, target);	
+					}
+					break;
+				}
+				case 'dmg' : {
+					if (!message.defender) 
+						return;
+					let target = handleTarget(gameData, battlecry.target, message);
+					if (target == -1) {
+						// invalid
+						return;
+					}
+					else {
+						dmgTarget(battlecry.potency, target);
+						clearDead(gameData, target, sendMessage);
+					}
+					break;
+				}
+				case 'draw' : {
+					addCardsToHand(gameData[player], battlecry.potency);
+					break;
+				}
+				case 'bonus' : {
+					applyBonuses(gameData, battlecry.bonus, card.uid, message);
+					break;
+				}
+				case 'summon' : {
+					await summonCard(gameData, battlecry, battlecry.potency, player, sendMessage);
+					break;
+				}
+			}
+		}
+	}
+}
+
+function handleTarget(gameData, targeting, message) {
+	if (!targeting) {
+		return findTarget(gameData, message.defender);
+	}
+	else if (targeting.hasOwnProperty('conditions')) {
+		let target = findTarget(gameData, message.defender);
+		return (validateTargetConditions(gameData, targeting.conditions, target.board[target.index], target.board)) ? target : false;
+	}
+	else {
+		console.log("finding specific");
+		return findTarget(gameData, targeting);
+	}
+}
+
+function checkForBonus(gameData, board, card) {
+	for (let i = 0; i < board.length; i++) {
+		if (board[i].uid != card.uid && board[i].specs.abilities.hasOwnProperty('bonus')) {
+			for (let j = 0; j < board[i].specs.abilities.bonus.length; j++) {
+				let bonus =  board[i].specs.abilities.bonus[j];
+				if (validateTargetCondition(gameData, bonus.target, card, board)) 
+					applyBonus(card, board[i].uid, bonus);
+			}
+		}
+	}
+}
+
+function applyBonus(target, issuer, bonus) {
+	switch (bonus.type) {
+		case 'attribute' : {
+			switch (bonus.attribute) {
+				case 'HP' : {
+					target.cHP += bonus.potency;
+					target.cMaxHP += bonus.potency;
+					break;
+				}
+				case 'Atk' : {
+					target.cAtk += bonus.potency;
+					break;
+				}
+				case 'mana' : {
+					target.mana += bonus.potency;
+					return;
+				}
+			}
+			if (target.status.hasOwnProperty(issuer)) {
+				target.status[issuer].push({
+					"type" : "bonus",
+					"potency" : bonus.potency,
+					"attribute" : bonus.attribute
+				})
+			}
+			else {
+				target.status[issuer] = [{
+					"type" : "bonus",
+					"potency" : bonus.potency,
+					"attribute" : bonus.attribute
+				}]
+			}
+			break;
+		}
+		case 'ability' : {
+			if (bonus.ability.hasOwnProperty('battlecry')) {
+				if (!target.specs.abilities.hasOwnProperty('battlecry'))
+					target.specs.abilities.battlecry = [];
+				target.specs.abilities.battlecry.push(...bonus.ability.battlecry);
+				break;
+			}
+			else if (bonus.ability.hasOwnProperty('taunt')) {
+				target.specs.abilities.taunt = "";
+			}
+			if (target.status.hasOwnProperty(issuer)) {
+				target.status[issuer].push({
+					"type" : "bonus",
+					"ability" : bonus.ability
+				})
+			}
+			else {
+				target.status[issuer] = [{
+					"type" : "bonus",
+					"ability" : bonus.ability
+				}]
+			}
+			break;
+		}
+	}
+}
+
+function applyBonuses(gameData, bonuses, issuer, message) {
+	for (let i = 0; i < bonuses.length; i++) {
+		let bonus = bonuses[i];
+		if (bonus.type == 'ability' && !bonus.target.hasOwnProperty('conditions')) { // Deprecated??? 
+			if (bonus.ability.hasOwnProperty('battlecry')) {
+				gameData[gameData.playing].battlecries.push({
+					target : bonus.target,
+					battlecry : bonus.ability
+				})
+			}
+		}
+		else {
+			let targets = handleTarget(gameData, bonus.target, message);
+			let target;
+			if (!targets) {
+				console.log("Invalid target");
+				return -1;
+			}
+			if (targets.constructor !== Array) {
+				if (targets.hasOwnProperty('tag')) {
+					targets = [targets]
+				}
+				else if (targets.hasOwnProperty('index') && !targets.hasOwnProperty('board'))
+					targets = targets.index;
+				else if(!targets.hasOwnProperty('index'))
+					targets = targets.board;
+				else 
+					targets = [targets.board[targets.index]];
+			}
+			for (let j = 0; j < targets.length; j++) {
+				target = targets[j];
+				applyBonus(target, issuer, bonus);
+			}
+		}
+	}
+}
+
+function findTarget(gameData, uid) {
+	// Multi param targetting
+	let playing = gameData[gameData.playing];
+	let notPlaying = (gameData.playing == 'player1') ? gameData.player2 : gameData.player1;
+	if (typeof uid == 'object') {
+		switch (uid.type) {
+			case 'family' : {
+				let targets = [];
+				if (uid.location == 'local-board') {
+					for (let i = 0; i < playing.board.length; i++) {
+						if (playing.board[i].specs.family == uid.family)
+							targets.push(playing.board[i]);
+					}
+				}
+				/// ...
+				return {
+					index : targets
+				}
+			}
+			case 'rand' : {
+				console.log("RANDOM")
+				if (uid.hasOwnProperty('repetition'))
+					return pickRandomTargets(gameData, uid.location, uid.repetition);
+				else
+					return pickRandomTarget(gameData, uid.location);
+			}
+			case 'aoe' : {
+				if (uid.hasOwnProperty('location')) {
+					switch (uid.location) {
+						case 'adversary-board' :
+							return { board : notPlaying.board };
+						case 'local-board' :
+							return { board: playing.board };
+						default :
+							return { board: playing.board.concat(notPlaying.board) }; 
+					}
+				}
+				else {
+					console.log("Completly stupid should never be here change your db pls 2 targets = 2 effects");
+					return false;
+				}
+			}
+		}
+	}
+	//
+	if (uid == 'local')
+		return gameData[gameData.playing];
+	if (uid == 'adversary')
+		return gameData[((gameData.playing == 'player1') ? 'player2' : 'player1')];
+	let indexDef = gameData.player1.board.findIndex(x => x.uid == uid);
+	if (indexDef != -1) {
+		return {
+			board: gameData.player1.board,
+			index: indexDef
+		}
+	}
+	indexDef = gameData.player2.board.findIndex(x => x.uid == uid);
+	if (indexDef != -1) {
+		return {
+			board: gameData.player2.board,
+			index: indexDef
+		}
+	}
+	return false;
+}
+
+function pickRandomTarget(gameData, limit) {
+	let playing = gameData[gameData.playing];
+	let notPlaying = (gameData.playing == 'player1') ? gameData.player2 : gameData.player1;
+	let pick;
+	
+	if (limit == "adversary-board")
+		pick = Math.floor(Math.random() * ((playing.board.length+notPlaying.board.length+1) - (playing.board.length+1)) + playing.board.length+1);
+	else if (limit == "adversary") 
+		pick = Math.floor(Math.random() * (playing.board.length+notPlaying.board.length+1 - playing.board.length+1) + playing.board.length+1);
+	else if (limit == "local-board") 
+		pick = Math.floor(Math.random() * (playing.board.length-1));
+	else if (limit == "local")
+		pick = Math.floor(Math.random() * (playing.board.length));
+	else 
+		pick = Math.floor(Math.random()*(playing.board.length+notPlaying.board.length+1));
+
+	if (pick < playing.board.length) {
+		return {
+			board : playing.board,
+			index: pick
+		}
+	}
+	else if (pick == playing.board.length) {
+		return playing;
+	}
+	else if (pick < (playing.board.length + notPlaying.board.length + 1)) {
+		return {
+			board : notPlaying.board,
+			index : pick - playing.board.length - 1
+		}
+	}
+	else {
+		return notPlaying;
+	}
+}
+
+function pickRandomTargets(gameData, limit, repetition) {
+	let playing = gameData[gameData.playing];
+	let notPlaying = (gameData.playing == 'player1') ? gameData.player2 : gameData.player1;
+	let board;
+	let pick;
+	let targets = [];
+	let max;
+	if (limit == "adversary-board") {
+		board = [...Array(notPlaying.board.length).keys()];
+	}
+	else if (limit == "adversary") {
+		board = [...Array(gameData.notPlaying.board.length+1).keys()];
+		max = gameData.notPlaying.board.length;
+	}
+	else if (limit == "local-board") {
+		board = [...Array(gameData.playing.board.length).keys()]
+	}
+	else if (limit == "local") {
+		board = [...Array(gameData.playing.board.length+1).keys()];
+		max = gameData.playing.board.length;
+	}
+	else {
+	}
+	for (let i = 0; i < repetition; i++) {
+		pick = Math.floor(Math.random() * board.length);
+		switch (limit) {
+			case 'adversary-board' :
+				targets.push({
+					board: notPlaying.board,
+					index : board[pick]
+				});
+				break;
+			case 'adversary' :
+				if (board[pick] == max)
+					targets.push(notPlaying);
+				else 
+					targets.push({
+						board: notPlaying.board,
+						index : board[pick]
+					});
+				break;
+			case 'local-board' :
+				targets.push({
+					board: notPlaying.board,
+					index : board[pick]
+				});
+				break;
+			case 'local' :
+				if (board[pick] == max)
+					targets.push(notPlaying);
+				else 
+					targets.push({
+						board: notPlaying.board,
+						index : board[pick]
+					});
+				break;
+		}
+		board.splice(pick, 1);
+	}
+	return targets;
+}
+
+function dmgTarget(potency, target) {
+	// Multiple targets
+	if (target.constructor == Array) {
+		for (let i = 0; i < target.length; i++) {
+			target[i].board[target[i].index].cHP -= potency;
+		}
+	}
+	// Face target
+	else if (target.hasOwnProperty('HP')) {
+		target.HP -= potency;
+	}
+	// Aoe Target
+	else if (!target.hasOwnProperty('index')) {
+		for (let i = 0; i < target.board.length; i++) {
+			target.board[i].cHP -= potency;
+		}
+	}
+	// Single creature target
+	else {
+		target.board[target.index].cHP -= potency;
 	}
 }
 
 function healTarget(potency, target) {
-
+	if (target.hasOwnProperty('tag')) {
+		target.HP = (target.HP + potency >=	 30) ? 30 : target.HP + potency;
+	}
+	else if (!target.hasOwnProperty('index')) {
+		for (let i = 0; i < target.board.length; i++) {
+			target.board[i].cHP -= (target.board[i].cHP + potency >= target.board[i].specs.HP) ? 
+														target.board[i].specs.HP : 
+														target.board[i].cHP + potency;;
+		}
+	}
+	else {
+		target.board[target.index].cHP = (target.board[target.index].cHP + potency >= target.board[target.index].specs.HP) ? 
+														target.board[target.index].specs.HP : 
+														target.board[target.index].cHP + potency;
+	}
 }
 
+function clearDead(gameData, target, sendMessage) {
+	if (target.constructor == Array) {
+		clearManyDeads(gameData, target, sendMessage);
+	}
+	// Look for player death
+	else if (target.hasOwnProperty('tag')) {
+		if (target.HP <= 0) {
+			endGame(gameData, sendMessage);
+		}
+	}
+	// Look for entire board
+	else if (!target.hasOwnProperty('index')) {
+		for (let i = 0; i < target.board.length; i++) {
+			if (target.board[i].cHP <= 0) {
+				target.board.splice(i, 1);
+			}
+		}
+	}
+	// Look for one specific target
+	else {
+		if (target.board[target.index].cHP <= 0) {
+			if (target.board[target.index].specs.abilities.hasOwnProperty('bonus'))
+				removeBonus(gameData, target.board[target.index].uid);
+			target.board.splice(target.index, 1);
+		}
+	}
+}
+
+function clearManyDeads(gameData, target, sendMessage) {
+	// Early checks
+	if (gameData.player1.HP <= 0) {
+		endGame(gameData, sendMessage);
+		return;
+	}
+	if (gameData.player2.HP <= 0) {
+		endGame(gameData, sendMessage);
+		return;
+	}
+
+	let highBoard;
+	let lowBoard;
+	let highDeads = [];
+	let lowDeads = [];
+	
+	if (gameData.player1.board.length > gameData.player2.board.length) {
+		lowBoard = gameData.player2.board;
+		highBoard = gameData.player1.board;
+
+	}
+	else {
+		lowBoard = gameData.player1.board;
+		highBoard = gameData.player2.board;
+	}
+	for (let i = highBoard.length-1; i > lowBoard.length; i--) {
+		if (lowBoard.length > 0 && lowBoard[i].cHP <= 0)
+			lowBoard.splice(i, 1);
+		if (highBoard[i].cHP <= 0)
+			highBoard.splice(i, 1);
+	}
+	for (let i = lowBoard.length; i >= 0; i--) {
+		if (lowBoard.length > 0 && lowBoard[i].cHP <= 0)
+			lowBoard.splice(i, 1);
+		if (highBoard[i].cHP <= 0)
+			highBoard.splice(i, 1);
+	
+	}	
+}
+
+function removeBonus(gameData, issuer) {
+	let highBoard;
+	let lowBoard;
+	if (gameData.player1.board.length > gameData.player2.board.length) {
+		lowBoard = gameData.player2.board;
+		highBoard = gameData.player1.board;
+
+	}
+	else {
+		lowBoard = gameData.player1.board;
+		highBoard = gameData.player2.board;
+	}
+	for (let i = 0; i < lowBoard.length; i++) {
+		revertAttribute(lowBoard[i], lowBoard[i].status[issuer]);
+		revertAttribute(highBoard[i], highBoard[i].status[issuer]);
+		delete lowBoard[i].status[issuer];
+		delete highBoard[i].status[issuer];
+	}
+	for (let i = lowBoard.length; i < highBoard.length; i++) {
+		revertAttribute(highBoard[i], highBoard[i].status[issuer]);
+		delete highBoard[i].status[issuer];
+	}
+}
+
+function revertAttribute(target, bonuses) {
+	if (!bonuses)
+		return;
+	for (let i = 0; i < bonuses.length; i++) {
+		let bonus = bonuses[i];
+		switch (bonus.attribute) {
+			case 'HP' : {
+				target.cMaxHP -= bonus.potency;
+				if (target.cHP > target.cMaxHP)
+					target.cHP = target.cMaxHP;
+				break;
+			}
+			case 'Atk' : {
+				target.cAtk -= bonus.potency;
+				break;
+			}
+		}
+	}
+}
+
+function endGame(gameData, sendMessage) {
+	sendMessage(connections[gameData.player1.id], 'end-game', {
+		winner: (gameData.player1.HP == 0) ? gameData.player2.tag : gameData.player1.tag
+	});
+	sendMessage(connections[gameData.player2.id], 'end-game', {
+		winner: (gameData.player1.HP == 0) ? gameData.player2.tag : gameData.player1.tag
+	});
+}
+
+function useHeroPower(message, gameData, sendMessage) {
+	if (gameData[gameData.playing].powerActions == 0) {
+		console.log("no more actions");
+		return;
+	}
+	if (gameData[gameData.playing].mana - 2 < 0) {
+		console.log("no more mana");
+		return;
+	}
+	switch (gameData[gameData.playing].job.specs.type) {
+		case 'dmg': {
+			// black mage
+			// dragoon
+			let target;
+			// Check if there is a limited target
+			if (gameData[gameData.playing].job.specs.hasOwnProperty('target')) {
+				target = handleTarget(gameData, gameData[gameData.playing].job.specs.target, null);
+				if (target === false) {
+					console.log('target not found');
+					return;
+				}
+			}
+			else {
+				target = handleTarget(gameData, null, message);
+				if (target === false) {
+					console.log('target not found');
+					return;
+				}
+			}
+			dmgTarget(gameData[gameData.playing].job.specs.potency, target);
+			clearDead(gameData, target, sendMessage);
+			break;
+		}
+		case 'heal': {
+			// white mage
+			let target;
+			// Check if there is a limited target
+			if (gameData[gameData.playing].job.specs.hasOwnProperty('target')) {
+				target = handleTarget(gameData, gameData[gameData.playing].job.specs.target, null);
+			}
+			else {
+				target = handleTarget(gameData, null, message);
+				if (target === false) {
+					console.log('target not found');
+					return;
+				}
+			}
+			healTarget(gameData[gameData.playing].job.specs.potency, target);
+			clearDead(gameData, target, sendMessage);
+			break;
+		}
+		case 'draw':
+			// astrologian
+			break;
+		case 'summon':
+			// summoner
+			// machinist
+			break;
+		case 'buff':
+			// scholar
+			// bard
+			// monk
+			// ninja
+			// paladin
+			break;
+		case 'weapon':
+			break;
+		case 'combined':
+			// dark knight
+			break;
+	}
+	gameData[gameData.playing].powerActions -= 1;
+	gameData[gameData.playing].mana -= 2;
+	sendMessage(connections[gameData.player1.id], 'update-hp', {
+		local: gameData.player1.HP,
+		adversary: gameData.player2.HP
+	});
+	sendMessage(connections[gameData.player2.id], 'update-hp', {
+		local: gameData.player2.HP,
+		adversary: gameData.player1.HP
+	});
+	sendMessage(connections[gameData.player1.id], 'update-mana', {
+		local: gameData.player1.mana,
+		adversary: gameData.player2.mana
+	});
+	sendMessage(connections[gameData.player2.id], 'update-mana', {
+		local: gameData.player2.mana,
+		adversary: gameData.player1.mana
+	});
+	sendMessage(connections[gameData.player1.id], 'update-board', {
+		local: gameData.player1.board,
+		adversary: gameData.player2.board 
+	});
+	sendMessage(connections[gameData.player2.id], 'update-board', {
+		local: gameData.player2.board,
+		adversary: gameData.player1.board
+	});
+	
+}
 
 function isCardValid(index, gameData, player, sendMessage) {
-	console.log("IS CARD VALID?")
 	if (index == -1) {
 		sendMessage(connections[gameData[player].id], 'error', 'Card not in hand');
 		return false;
 	}
-	console.log("ttttttttttttt")
-	console.log(gameData[player].mana);
-	console.log(gameData[player].hand[index].spcost);
-	console.log("ttttttttttttt")
 	if (gameData[player].mana - gameData[player].hand[index].specs.cost < 0) {
 		sendMessage(connections[gameData[player].id], 'error', 'Not enough mana');
 		return false;
 	}
 	if ( gameData[player].hand[index].type == 'creature')
-		if (gameData[player].board.length == maxBoardSize) {
+		if (gameData[player].board.length == MAX_BOARD_SIZE) {
 			sendMessage(connections[gameData[player].id], 'error', 'No space for this creature');
 			return false;
 		}
@@ -348,7 +1175,6 @@ function attack(message, gameData, sendMessage) {
 }
 
 function attackCreature(gameData, cardsData, player, adversary) {
-	console.log("ATTACKING CREATURE");
 	let attacker = cardsData.card;
 	let defender = gameData[adversary].board[cardsData.indexDef];
 	attacker.cHP -= defender.cAtk;
@@ -371,6 +1197,7 @@ function attackCreature(gameData, cardsData, player, adversary) {
 		gameData[adversary].board.splice(cardsData.indexDef,1);
 	}
 }
+
 
 function attackFace(gameData, cardsData, adversary) {
 	let attacker = cardsData.card;
@@ -441,6 +1268,18 @@ function drawCards(deck, nb=1) {
 	return cards;
 }
 
+function addCardsToHand(player, nb=1) {
+	for(var i = 0; i < nb; i++) {
+		let index = Math.floor(Math.random()*(player.deck.length-1));
+		let select = player.deck[index];
+		player.deck.splice(index, 1);
+		if (player.hand.length >= MAX_HAND_SIZE) {
+			break;
+		}
+		player.hand.push(select);
+	}
+}
+
 function sendMessage(connection, command, message) {
 	connection.sendUTF(JSON.stringify({
 			issuer: 'game-manager',
@@ -460,32 +1299,37 @@ function saveGameData(gameData, id) {
 	db.put(id, JSON.stringify(gameData));
 }
 
-function route (connection, message) {
-	getGameData(message)
-	.then((gameData) => {
-		switch (message.command) {
-			case 'end-turn':
-				endTurn(message,gameData, sendMessage);
-				break;
-			case 'swap-cards':
-				swapCards(message,gameData, sendMessage);
-				break;
-			case 'play-card':
-				playCard(message,gameData, sendMessage);
-				break;
-			case 'attack':
-				attack(message,gameData, sendMessage);
-				break;
-		}
-		saveGameData(gameData, message.gameId);
-	})
+async function route (connection, message) {
+	let gameData = await getGameData(message);
+	switch (message.command) {
+		case 'end-turn':
+			endTurn(message, gameData, sendMessage);
+			break;
+		case 'swap-cards':
+			await swapCards(message, gameData, sendMessage);
+			break;
+		case 'play-card':
+			await playCard(message, gameData, sendMessage);
+			break;
+		case 'attack':
+			attack(message, gameData, sendMessage);
+			break;
+		case 'hero-power':
+			useHeroPower(message, gameData, sendMessage);
+			break;
+	}
+	saveGameData(gameData, message.gameId);
 }
 
 module.exports = {
 	route,
 	initGame,
+	// Exposed for testing purposes
 	swapCards,
 	playCard,
 	attack,
-	endTurn
+	endTurn,
+	useHeroPower,
+	pickRandomTarget,
+	clearDead
 }

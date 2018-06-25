@@ -41,18 +41,13 @@ class Game{
 		str += '  [ ';
 		str += card.uid + ' ';
 		str += card.name + ' ';
-		if (card.type == "creature") {
-			str += card.specs.HP + 'HP ';
-			str += card.specs.Atk + 'ATK ';
-			if (card.specs.hasOwnProperty('family'))
-				str += card.specs.family + 'Family ';
-			str += JSON.stringify(card.specs.abilities);
-		}
-		else {
-			str += JSON.stringify(card.specs.effects);	
-		}
-		str += card.type + 'Type ';
+		str += card.specs.HP + 'HP ';
+		str += card.specs.Atk + 'ATK ';
 		str += card.specs.cost + 'Cost ';
+		str += card.type + 'Type ';
+		if (card.specs.hasOwnProperty('family'))
+			str += card.specs.family + 'Family ';
+		str += JSON.stringify(card.specs.abilities);
 		str += ']';
 		return str
 	}
