@@ -1,0 +1,68 @@
+openapi: 3.0.0
+info:
+  title: Project AY API
+  description: Project AY API
+  contact:
+    email: you@your-company.com
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
+servers:
+- url: https://virtserver.swaggerhub.com/lamyotte/project-ay/1.0.0
+  description: SwaggerHub API Auto Mocking
+security:
+- bearerAuth: []
+tags:
+- name: client
+  description: Operations available to game clients
+- name: internal
+  description: Operations only availble internally
+paths:
+  /decks:
+    get:
+      tags:
+      - client
+      summary: list decks for player
+      description: |
+        Lists the decks available for the current
+      operationId: getDecks
+      responses:
+        200:
+          description: the list of decks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Deck'
+        401:
+          description: Authentication information is missing or invalid
+components:
+  schemas:
+    Deck:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        job:
+          $ref: '#/components/schemas/Job'
+    Job:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        name:
+          type: string
+  responses:
+    UnauthorizedError:
+      description: Authentication information is missing or invalid
+    NotFoundError:
+      description: Specified ID was not found.
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
