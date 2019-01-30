@@ -11,11 +11,11 @@ Infrastructure rework
 ### Requirements 
 - NodeJS installed
 - Docker installed
-- PostgreSQL database exists
+- PostgreSQL database exists (or any sequelize compatible db)
 
 #### Database Setup
 1. Create `config.json` file in `/database/config`
-2. Set config file with database connection informations (need to set up a database, Postgres was used but any sequelize compatible should work)
+2. Set config file with database connection informations (needed to set up a database, Postgres was used but any sequelize compatible db should work)
 3. Create the database tables with : 
 `sequelize db:migrate`
 4. Create default database data by running the`generate.js` script in `/database/creationScripts`
@@ -23,6 +23,6 @@ Infrastructure rework
 
 
 ### Game set up 
-1. In `/server_services`  run `docker up -d` to start game server
-2. In `/consoleClient` run `docker up -d` to start console client 
-3. Open favorite browser and access `http://localhost:8081/` 
+1. Run `docker-compose up -d` to start the game server
+2. Pick a game client (ex: frontend-console) and follow the instructions to set it up
+3. Play the game!
