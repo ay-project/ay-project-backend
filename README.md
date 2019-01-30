@@ -1,4 +1,4 @@
-# projectAY-musical-broccoli
+# AY Project Backend
 
 ### Project description
 This project is a card game in NodeJS. (See wiki for more infos)
