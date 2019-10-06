@@ -1,10 +1,10 @@
 const players = require("./database/controllers/players");
-var initGame = require("./game_manager.js").initGame;
+const matchlogs = require("./database/controllers/matchlogs");
 
 var waitList = [];
 
 /**
- * interval function to start games
+ * Interval function to start games
  * @param  {array} waitList list of waiting players
  */
 function matchmake() {
@@ -13,18 +13,32 @@ function matchmake() {
     waitList.splice(0, 2);
   }
 }
+async function initGame(player1, player2) {
+  let log = await matchlogs.create(
+    player1.player.id,
+    player2.player.id,
+    player1.deck.id,
+    player2.deck.id
+  );
+  sendMessage(player1.connection, {
+    gameToken: log.matchToken
+  });
+  sendMessage(player2.connection, {
+    gameToken: log.matchToken
+  });
+  player1.connection.close();
+  player2.connection.close();
+}
 
-function addWaitingPlayer(connection, message) {
+function addWaitingPlayer(connection, player, deck) {
   waitList.push({
-    id: message.playerId,
-    deckId: message.deckId,
+    player: player,
+    deck: deck,
     connection: connection
   });
   sendMessage(connection, "Request received wait for second player...");
   matchmake();
 }
-
-function getPlayerInfos(id) {}
 
 function removeWaitingPlayer(index = null, id = null) {
   if (index != null) {
@@ -40,15 +54,6 @@ function sendMessage(connection, message) {
     })
   );
 }
-function route(connection, message) {
-  console.log(message);
-  switch (message.command) {
-    case "start-game":
-      addWaitingPlayer(connection, message);
-  }
-}
-
 module.exports = {
-  route,
-  matchmake
+  addWaitingPlayer
 };
