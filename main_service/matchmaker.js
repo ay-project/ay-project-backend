@@ -1,4 +1,4 @@
-const players = require("./database/controllers/players");
+const players = require("../database/controllers/players");
 var initGame = require("./game_manager.js").initGame;
 
 var waitList = [];
@@ -24,7 +24,7 @@ function addWaitingPlayer(connection, message) {
   matchmake();
 }
 
-function getPlayerInfos(id) {}
+function getPlayerInfos(id) { }
 
 function removeWaitingPlayer(index = null, id = null) {
   if (index != null) {

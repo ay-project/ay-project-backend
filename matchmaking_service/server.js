@@ -2,19 +2,19 @@ var WebSocketServer = require("ws");
 
 var http = require("http");
 var matchmaker = require("./matchmaker.js");
-const Connection = require("./database/controllers/connections");
-const Deck = require("./database/controllers/decks");
+const Connection = require("../database/controllers/connections");
+const Deck = require("../database/controllers/decks");
 
 var connections = {}; // Ongoing connections by id
 var nextId = 0; // Next unallocated connection id
 
-var server = http.createServer(function(request, response) {
+var server = http.createServer(function (request, response) {
   console.log(new Date() + " Received request for " + request.url);
   response.writeHead(404);
   response.end();
 });
 
-server.listen(8083, "0.0.0.0", function() {
+server.listen(8083, "0.0.0.0", function () {
   console.log("Listening to port:  " + 8083);
 });
 
@@ -29,7 +29,7 @@ function originIsAllowed(origin) {
   return true;
 }
 
-wsServer.on("connection", function(connection) {
+wsServer.on("connection", function (connection) {
   // Verifying origin of request
   if (!originIsAllowed(connection.origin)) {
     connection.reject();
@@ -50,7 +50,7 @@ wsServer.on("connection", function(connection) {
   nextId++;
   console.log(new Date() + " Connection accepted.");
   //
-  connection.on("message", async function(message) {
+  connection.on("message", async function (message) {
     // Possible requests
     // 1) Queue for game
     let request = JSON.parse(message);
@@ -70,7 +70,7 @@ wsServer.on("connection", function(connection) {
 
     console.log("Received Message: " + message);
   });
-  connection.on("close", function(reasonCode, description) {
+  connection.on("close", function (reasonCode, description) {
     console.log(
       new Date() + " Peer " + connection.remoteAddress + " disconnected."
     );

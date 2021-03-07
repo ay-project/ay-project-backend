@@ -1,13 +1,13 @@
 version: "3.1"
 services:
-  main_service:
+  main-service:
     build:
       context: .
       dockerfile: ./main_service/Dockerfile
     working_dir: /usr/src/app/main_service
     environment:
       NODE_ENV: production
-    command: "node server.js"
+    command: "npm start"
     ports:
       - "8084:8084"
     restart: always
@@ -24,7 +24,7 @@ services:
       - "8083:8083"
     restart: always
 
-  api_service:
+  api-service:
     build:
       context: .
       dockerfile: ./api_service/Dockerfile
@@ -35,8 +35,6 @@ services:
     ports:
       - "3002:3002"
     restart: always
-    volumes:
-      - /usr/src/app/database
 
   database:
     image: postgres

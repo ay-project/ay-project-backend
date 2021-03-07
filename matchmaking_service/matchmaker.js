@@ -1,5 +1,5 @@
-const players = require("./database/controllers/players");
-const matchlogs = require("./database/controllers/matchlogs");
+const players = require("../database/controllers/players");
+const matchlogs = require("../database/controllers/matchlogs");
 
 var waitList = [];
 

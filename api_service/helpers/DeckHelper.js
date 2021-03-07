@@ -1,5 +1,5 @@
-const players = require('../database/controllers/players');
-const decks = require('../database/controllers/decks');
+const players = require('../../database/controllers/players');
+const decks = require('../../database/controllers/decks');
 
 function getDecks(message) {
 	return decks.getByPlayerDecksOnly(message.user)

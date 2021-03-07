@@ -1,4 +1,4 @@
-const Connection = require('../database/controllers/connections');
+const Connection = require('../../database/controllers/connections');
 
 function signin(username, password) {
 	return players.getByTag(username)

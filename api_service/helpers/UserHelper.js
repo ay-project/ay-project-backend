@@ -1,5 +1,5 @@
-const players = require("../database/controllers/players");
-const connections = require("../database/controllers/connections");
+const players = require("../../database/controllers/players");
+const connections = require("../../database/controllers/connections");
 
 function signin(username, password) {
   return players

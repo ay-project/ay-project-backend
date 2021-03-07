@@ -9,6 +9,3 @@ COPY ./api_service /usr/src/app/api_service
 COPY ./database /usr/src/app/database
 
 EXPOSE 3002
-
-RUN apt-get update
-RUN apt-get install -y postgresql-client

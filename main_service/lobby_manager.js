@@ -1,7 +1,7 @@
 const updateConnection = require("./game_manager.js").updateConnection;
 const initGame = require("./game_manager.js").initGame;
-const connections = require("./database/controllers/connections");
-const matchlogs = require("./database/controllers/matchlogs");
+const connections = require("../database/controllers/connections");
+const matchlogs = require("../database/controllers/matchlogs");
 
 var waitList = {};
 

@@ -1,6 +1,6 @@
-const players = require("./database/controllers/players");
-const connections = require("./database/controllers/connections");
-const matchlogs = require("./database/controllers/matchlogs");
+const players = require("../database/controllers/players");
+const connections = require("../database/controllers/connections");
+const matchlogs = require("../database/controllers/matchlogs");
 
 function connect(connection, message) {
   players
@@ -9,6 +9,7 @@ function connect(connection, message) {
       sendMessage(connection, res);
     })
     .catch(err => {
+      console.log(err)
       sendMessage(connection, {
         type: "error",
         error: err
@@ -33,6 +34,7 @@ function sendMessage(connection, message) {
 }
 
 function route(connection, message) {
+  console.log("got it")
   switch (message.command) {
     case "connect":
       connect(
